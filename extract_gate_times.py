@@ -8,6 +8,7 @@ def ocr_image(img):
     text = pytesseract.image_to_string(img, lang='eng')
     return ''.join(c for c in text if c.isprintable() or c=='\n')
 
+
 def parse_section(img, start_day, days):
     text = ocr_image(img)
     items = re.findall(r"(\d{2}:\d{2})\s+(Raise|Lower)", text)
@@ -15,6 +16,7 @@ def parse_section(img, start_day, days):
     for i in range(days):
         for t, a in items[i*4:(i+1)*4]:
             records.append((start_day + i, t, a))
+
     return records
 
 def extract(pdf_path, csv_path):
@@ -25,6 +27,7 @@ def extract(pdf_path, csv_path):
         'September', 'October', 'November', 'December'
     ]
     month = 0
+
     month_days = {
         'January': 31,
         'February': 28,
@@ -39,11 +42,13 @@ def extract(pdf_path, csv_path):
         'November': 30,
         'December': 31,
     }
+
     records = []
     for page in pages:
         w,h = page.size
         for half in [page.crop((0,0,w//2,h)), page.crop((w//2,0,w,h))]:
             hw,hh = half.size
+
             left = half.crop((0,0,hw//2,hh))
             right = half.crop((hw//2,0,hw,hh))
             name = month_names[month % 12]
@@ -54,6 +59,7 @@ def extract(pdf_path, csv_path):
             if second_days > 0:
                 records += [(name, d, t, a) for d, t, a in parse_section(right, 17, second_days)]
             month += 1
+
     with open(csv_path,'w',newline='') as f:
         writer = csv.writer(f)
         writer.writerow(['month','day','time','action'])

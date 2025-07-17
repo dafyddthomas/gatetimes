@@ -47,11 +47,14 @@ def iso_local(dt: int) -> str:
     return to_local(dt).isoformat()
 
 
+
 def load_tide_data():
     if not WORLDTIDES_KEY:
         print("WORLDTIDES_KEY not set; skipping tide fetch")
         return
+
     app.state.tide_cache = []
+
     start = datetime.utcnow()
     end = start + timedelta(days=365)
     current = start
@@ -59,9 +62,11 @@ def load_tide_data():
         chunk_days = min(7, (end - current).days)
         chunk = fetch_tide_chunk(current, chunk_days)
         for e in chunk:
+
             dt_iso = iso_local(e["dt"])
             e["dt"] = dt_iso
             e["date"] = dt_iso
+
         app.state.tide_cache.extend(chunk)
         current += timedelta(days=chunk_days)
 
@@ -81,6 +86,7 @@ def load_weather_data():
     r = requests.get(url, params=params, timeout=10)
     r.raise_for_status()
     data = r.json()
+
     app.state.weather_cache = {}
     for day in data.get("daily", []):
         dt_local = to_local(day["dt"])
@@ -88,6 +94,7 @@ def load_weather_data():
         for key in ("dt", "sunrise", "sunset", "moonrise", "moonset"):
             if key in day:
                 day[key] = iso_local(day[key])
+
         app.state.weather_cache[date_str] = day
 
 
@@ -96,7 +103,9 @@ def load_gate_times():
     if not os.path.exists(path):
         print("gate_times.csv not found; skipping gate time load")
         return
+
     app.state.gate_times = {}
+
     months = [
         "January",
         "February",
@@ -122,6 +131,7 @@ def load_gate_times():
             app.state.gate_times.setdefault(key, []).append(event)
 
 
+
 async def refresh_loop():
     """Background task to refresh caches every 12 hours."""
     while True:
@@ -139,6 +149,7 @@ async def startup_event():
     asyncio.create_task(refresh_loop())
 
 
+
 @app.get("/tides")
 def all_tides():
     return app.state.tide_cache
@@ -150,8 +161,10 @@ def tides_for_date(date: str):
         target = datetime.strptime(date, "%Y-%m-%d").date()
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format")
+
     results = [e for e in app.state.tide_cache
                if datetime.fromisoformat(e["dt"]).astimezone(TZ).date() == target]
+
     if not results:
         raise HTTPException(status_code=404, detail="No tide data for this date")
     return results
