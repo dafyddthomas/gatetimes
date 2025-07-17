@@ -123,16 +123,28 @@ def load_gate_times():
         for row in csv.DictReader(f):
             month = months.index(row["month"]) + 1
             day = int(row["day"])
-            hour, minute = map(int, row["time"].split(":"))
-            if hour == 24:
+            try:
+                hour, minute = map(int, row["time"].split(":"))
+            except ValueError:
+                print(
+                    f"Invalid time format '{row['time']}' in gate times CSV; skipping"
+                )
+                continue
+
+            if hour == 24 and minute == 0:
                 # Times recorded as 24:00 refer to midnight of the
                 # following day. Handle this by rolling the date
                 # forward by one day and setting the hour to 0.
                 dt = datetime(2025, month, day, 0, minute, tzinfo=TZ) + timedelta(
                     days=1
                 )
-            else:
+            elif 0 <= hour <= 23 and 0 <= minute <= 59:
                 dt = datetime(2025, month, day, hour, minute, tzinfo=TZ)
+            else:
+                print(
+                    f"Invalid time '{row['time']}' in gate times CSV; skipping"
+                )
+                continue
             key = dt.strftime("%Y-%m-%d")
             event = {"datetime": dt.isoformat(), "action": row["action"]}
             app.state.gate_times.setdefault(key, []).append(event)
