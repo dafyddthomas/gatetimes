@@ -47,7 +47,6 @@ def iso_local(dt: int) -> str:
     return to_local(dt).isoformat()
 
 
-
 def load_tide_data():
     if not WORLDTIDES_KEY:
         print("WORLDTIDES_KEY not set; skipping tide fetch")
@@ -125,11 +124,18 @@ def load_gate_times():
             month = months.index(row["month"]) + 1
             day = int(row["day"])
             hour, minute = map(int, row["time"].split(":"))
-            dt = datetime(2025, month, day, hour, minute, tzinfo=TZ)
+            if hour == 24:
+                # Times recorded as 24:00 refer to midnight of the
+                # following day. Handle this by rolling the date
+                # forward by one day and setting the hour to 0.
+                dt = datetime(2025, month, day, 0, minute, tzinfo=TZ) + timedelta(
+                    days=1
+                )
+            else:
+                dt = datetime(2025, month, day, hour, minute, tzinfo=TZ)
             key = dt.strftime("%Y-%m-%d")
             event = {"datetime": dt.isoformat(), "action": row["action"]}
             app.state.gate_times.setdefault(key, []).append(event)
-
 
 
 async def refresh_loop():
@@ -149,7 +155,6 @@ async def startup_event():
     asyncio.create_task(refresh_loop())
 
 
-
 @app.get("/tides")
 def all_tides():
     return app.state.tide_cache
@@ -162,8 +167,11 @@ def tides_for_date(date: str):
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format")
 
-    results = [e for e in app.state.tide_cache
-               if datetime.fromisoformat(e["dt"]).astimezone(TZ).date() == target]
+    results = [
+        e
+        for e in app.state.tide_cache
+        if datetime.fromisoformat(e["dt"]).astimezone(TZ).date() == target
+    ]
 
     if not results:
         raise HTTPException(status_code=404, detail="No tide data for this date")
@@ -178,7 +186,9 @@ def weather(date: str):
         raise HTTPException(status_code=400, detail="Invalid date format")
     today = datetime.now(TZ).date()
     if target < today or target > today + timedelta(days=5):
-        raise HTTPException(status_code=404, detail="Weather available only for the next 5 days")
+        raise HTTPException(
+            status_code=404, detail="Weather available only for the next 5 days"
+        )
     if date not in app.state.weather_cache:
         load_weather_data()
     if date not in app.state.weather_cache:
