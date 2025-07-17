@@ -24,6 +24,10 @@ python extract_gate_times.py
 - `/gate-times` and `/gate-times/{YYYY-MM-DD}` - gate raise and lower times
   extracted from `GateTimes2025.pdf`.
 
+Tide, weather and gate time data are cached in memory and refreshed every
+12&nbsp;hours. All timestamps returned by the API are expressed in local ISO
+format for Conwy, North Wales.
+
 Copy `.env.example` to `.env` and fill in your `WORLDTIDES_KEY` and
 `OPENWEATHER_KEY`.
 
