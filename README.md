@@ -18,6 +18,8 @@ python extract_gate_times.py
 
 - `/tides` and `/tides/{YYYY-MM-DD}` - 12\u00a0months of cached tide data from
   [WorldTides](https://www.worldtides.info/apidocs) converted to local time.
+- `/tide-heights` - half hour tide heights for the next 7 days refreshed once a
+  week.
 - `/weather/{YYYY-MM-DD}` - weather forecast for a day if it is within the next
   five days using [OpenWeather](https://openweathermap.org/api/one-call-3), also
   returned in local time.
@@ -30,8 +32,12 @@ Tide, weather and gate time data are cached in memory and refreshed every
 format for Conwy, North Wales.
 
 
-Copy `.env.example` to `.env` and fill in your `WORLDTIDES_KEY` and
-`OPENWEATHER_KEY`.
+Copy `.env.example` to `.env` and fill in your `WORLDTIDES_KEY`,
+`OPENWEATHER_KEY`, and authentication values `BASIC_AUTH_USER`,
+`BASIC_AUTH_PASS` or `MCP_API_KEY`.
+
+All API endpoints require authentication using either HTTP Basic credentials or
+an `X-API-KEY` header containing the value of `MCP_API_KEY`.
 
 ## Using a virtual environment
 
