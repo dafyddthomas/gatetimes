@@ -19,10 +19,16 @@ python extract_gate_times.py
 - `/tides` and `/tides/{YYYY-MM-DD}` - 12\u00a0months of cached tide data from
   [WorldTides](https://www.worldtides.info/apidocs) converted to local time.
 - `/tide-heights` - half hour tide heights for the next 7 days refreshed once a
-  week.
+  week. Heights are relative to chart datum (CD).
 - `/weather/{YYYY-MM-DD}` - weather forecast for a day if it is within the next
   five days using [OpenWeather](https://openweathermap.org/api/one-call-3), also
   returned in local time.
+- `/sunrise-sunset?lat=LAT&lng=LON&date=YYYY-MM-DD` - sunrise and sunset times
+  for a specific date from [sunrise-sunset.org](https://sunrise-sunset.org/api).
+- `/moon-phase?date=YYYY-MM-DD` - moon phase data from
+  [Farmsense](https://api.farmsense.net/v1/moonphases/).
+- `/marine` - sea level and ocean current forecast from
+  [Open-Meteo](https://open-meteo.com/).
 - `/gate-times` and `/gate-times/{YYYY-MM-DD}` - gate raise and lower times
   extracted from `GateTimes2025.pdf`.
 
