@@ -30,6 +30,9 @@ app.state.weather_cache = {}
 app.state.gate_times = {}
 app.state.tide_heights_cache = []
 app.state.tide_heights_last_load = datetime.min
+app.state.sun_cache = {}
+app.state.moon_cache = {}
+app.state.marine_cache = {}
 
 security_basic = HTTPBasic(auto_error=False)
 api_key_header = APIKeyHeader(name="X-API-KEY", auto_error=False)
@@ -160,6 +163,44 @@ def iso_local(dt: int) -> str:
     return to_local(dt).isoformat()
 
 
+def fetch_sunrise_sunset(date: str, lat: float, lng: float):
+    url = "https://api.sunrise-sunset.org/json"
+    params = {"lat": lat, "lng": lng, "date": date, "formatted": 0}
+    r = requests.get(url, params=params, timeout=10)
+    r.raise_for_status()
+    data = r.json()
+    data["tzid"] = TZ.key
+    return data
+
+
+def fetch_moon_phase(ts: int):
+    url = "https://api.farmsense.net/v1/moonphases/"
+    params = {"d": ts}
+    r = requests.get(url, params=params, timeout=10)
+    r.raise_for_status()
+    return r.json()
+
+
+def fetch_marine_forecast(
+    lat: float,
+    lon: float,
+    hourly: str,
+    timeformat: str = "unixtime",
+    forecast_hours: int = 48,
+):
+    url = "https://api.open-meteo.com/v1/marine"
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "hourly": hourly,
+        "timeformat": timeformat,
+        "forecast_hours": forecast_hours,
+    }
+    r = requests.get(url, params=params, timeout=10)
+    r.raise_for_status()
+    return r.json()
+
+
 def load_tide_data():
     if not WORLDTIDES_KEY:
         print("WORLDTIDES_KEY not set; skipping tide fetch")
@@ -207,6 +248,7 @@ def fetch_tide_heights(start_date: datetime, days: int):
         "lon": LON,
         "date": start_date.strftime("%Y-%m-%d"),
         "days": days,
+        "datum": "CD",
         "key": WORLDTIDES_KEY,
     }
     r = requests.get(url, params=params, timeout=10)
@@ -362,6 +404,55 @@ def weather(date: str, auth: None = Depends(verify_auth)):
     if date not in app.state.weather_cache:
         raise HTTPException(status_code=404, detail="Weather data not found")
     return app.state.weather_cache[date]
+
+
+@app.get("/sunrise-sunset")
+def sunrise_sunset(
+    date: str,
+    lat: float = LAT,
+    lng: float = LON,
+    auth: None = Depends(verify_auth),
+):
+    try:
+        datetime.strptime(date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format")
+    key = f"{lat}:{lng}:{date}"
+    if key not in app.state.sun_cache:
+        app.state.sun_cache[key] = fetch_sunrise_sunset(date, lat, lng)
+    return app.state.sun_cache[key]
+
+
+@app.get("/moon-phase")
+def moon_phase(date: str, auth: None = Depends(verify_auth)):
+    try:
+        dt = datetime.strptime(date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format")
+    ts = int(dt.replace(tzinfo=timezone.utc).timestamp())
+    if ts not in app.state.moon_cache:
+        data = fetch_moon_phase(ts)
+        if isinstance(data, list) and data:
+            data = data[0]
+        app.state.moon_cache[ts] = data
+    return app.state.moon_cache[ts]
+
+
+@app.get("/marine")
+def marine(
+    forecast_hours: int = 48,
+    timeformat: str = "unixtime",
+    hourly: str = "sea_level_height_msl,ocean_current_velocity,ocean_current_direction",
+    lat: float = LAT,
+    lon: float = LON,
+    auth: None = Depends(verify_auth),
+):
+    key = f"{lat}:{lon}:{hourly}:{timeformat}:{forecast_hours}"
+    if key not in app.state.marine_cache:
+        app.state.marine_cache[key] = fetch_marine_forecast(
+            lat, lon, hourly, timeformat, forecast_hours
+        )
+    return app.state.marine_cache[key]
 
 
 @app.get("/gate-times")
