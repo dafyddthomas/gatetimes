@@ -1,7 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 import os
-import csv
 import asyncio
 import secrets
 import requests
@@ -18,6 +17,7 @@ OPENWEATHER_KEY = os.getenv("OPENWEATHER_KEY")
 BASIC_AUTH_USER = os.getenv("BASIC_AUTH_USER")
 BASIC_AUTH_PASS = os.getenv("BASIC_AUTH_PASS")
 MCP_API_KEY = os.getenv("MCP_API_KEY")
+GATE_OPEN_HEIGHT = float(os.getenv("GATE_OPEN_HEIGHT", "4"))
 LAT = 53.28
 LON = -3.83
 TZ = ZoneInfo("Europe/London")
@@ -215,10 +215,9 @@ def load_tide_data():
         chunk_days = min(7, (end - current).days)
         chunk = fetch_tide_chunk(current, chunk_days)
         for e in chunk:
-
-            dt_iso = iso_local(e["dt"])
-            e["dt"] = dt_iso
-            e["date"] = dt_iso
+            dt_local = to_local(e["dt"])
+            e["dt"] = dt_local.isoformat()
+            e["date"] = dt_local.strftime("%Y-%m-%d")
 
         app.state.tide_cache.extend(chunk)
         current += timedelta(days=chunk_days)
@@ -232,9 +231,9 @@ def load_tide_heights():
     start = datetime.utcnow()
     heights = fetch_tide_heights(start, 7)
     for h in heights:
-        dt_iso = iso_local(h["dt"])
-        h["dt"] = dt_iso
-        h["date"] = dt_iso
+        dt_local = to_local(h["dt"])
+        h["dt"] = dt_local.isoformat()
+        h["date"] = dt_local.strftime("%Y-%m-%d")
 
     app.state.tide_heights_cache = heights
     app.state.tide_heights_last_load = datetime.utcnow()
@@ -287,55 +286,38 @@ def load_weather_data():
         app.state.weather_cache[date_str] = day
 
 
-def load_gate_times():
-    path = "gate_times.csv"
-    if not os.path.exists(path):
-        print("gate_times.csv not found; skipping gate time load")
-        return
+def calculate_gate_times():
+    """Calculate approximate gate raise/lower times from tide heights."""
+    if not app.state.tide_heights_cache:
+        load_tide_heights()
 
-    app.state.gate_times = {}
+    threshold = GATE_OPEN_HEIGHT
+    events: dict[str, list] = {}
 
-    months = [
-        "January",
-        "February",
-        "March",
-        "April",
-        "May",
-        "June",
-        "July",
-        "August",
-        "September",
-        "October",
-        "November",
-        "December",
-    ]
-    with open(path, newline="") as f:
-        for row in csv.DictReader(f):
-            month = months.index(row["month"]) + 1
-            day = int(row["day"])
-            try:
-                hour, minute = map(int, row["time"].split(":"))
-            except ValueError:
-                print(
-                    f"Invalid time format '{row['time']}' in gate times CSV; skipping"
-                )
-                continue
+    prev_dt: Optional[datetime] = None
+    prev_height: Optional[float] = None
 
-            if hour == 24 and minute == 0:
-                # Times recorded as 24:00 refer to midnight of the
-                # following day. Handle this by rolling the date
-                # forward by one day and setting the hour to 0.
-                dt = datetime(2025, month, day, 0, minute, tzinfo=TZ) + timedelta(
-                    days=1
-                )
-            elif 0 <= hour <= 23 and 0 <= minute <= 59:
-                dt = datetime(2025, month, day, hour, minute, tzinfo=TZ)
-            else:
-                print(f"Invalid time '{row['time']}' in gate times CSV; skipping")
-                continue
-            key = dt.strftime("%Y-%m-%d")
-            event = {"datetime": dt.isoformat(), "action": row["action"]}
-            app.state.gate_times.setdefault(key, []).append(event)
+    for entry in app.state.tide_heights_cache:
+        dt = datetime.fromisoformat(entry["dt"]).astimezone(TZ)
+        height = entry["height"]
+        if prev_dt is not None and prev_height is not None:
+            if prev_height < threshold <= height:
+                ratio = (threshold - prev_height) / (height - prev_height)
+                crossing = prev_dt + (dt - prev_dt) * ratio
+                date_key = crossing.strftime("%Y-%m-%d")
+                event = {"datetime": crossing.isoformat(), "action": "raise"}
+                events.setdefault(date_key, []).append(event)
+            elif prev_height > threshold >= height:
+                ratio = (prev_height - threshold) / (prev_height - height)
+                crossing = prev_dt + (dt - prev_dt) * ratio
+                date_key = crossing.strftime("%Y-%m-%d")
+                event = {"datetime": crossing.isoformat(), "action": "lower"}
+                events.setdefault(date_key, []).append(event)
+
+        prev_dt = dt
+        prev_height = height
+
+    app.state.gate_times = events
 
 
 async def refresh_loop():
@@ -343,9 +325,9 @@ async def refresh_loop():
     while True:
         await asyncio.to_thread(load_tide_data)
         await asyncio.to_thread(load_weather_data)
-        await asyncio.to_thread(load_gate_times)
         if datetime.utcnow() - app.state.tide_heights_last_load > timedelta(days=7):
             await asyncio.to_thread(load_tide_heights)
+        await asyncio.to_thread(calculate_gate_times)
         await asyncio.sleep(60 * 60 * 12)
 
 
@@ -353,28 +335,19 @@ async def refresh_loop():
 async def startup_event():
     await asyncio.to_thread(load_tide_data)
     await asyncio.to_thread(load_weather_data)
-    await asyncio.to_thread(load_gate_times)
     await asyncio.to_thread(load_tide_heights)
+    await asyncio.to_thread(calculate_gate_times)
     asyncio.create_task(refresh_loop())
-
-
-@app.get("/tides", response_model=List[TideEvent])
-def all_tides(offset: int = 0, limit: int = 100, auth: None = Depends(verify_auth)):
-    return app.state.tide_cache[offset : offset + limit]
 
 
 @app.get("/tides/{date}", response_model=List[TideEvent])
 def tides_for_date(date: str, auth: None = Depends(verify_auth)):
     try:
-        target = datetime.strptime(date, "%Y-%m-%d").date()
+        datetime.strptime(date, "%Y-%m-%d")
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format")
 
-    results = [
-        e
-        for e in app.state.tide_cache
-        if datetime.fromisoformat(e["dt"]).astimezone(TZ).date() == target
-    ]
+    results = [e for e in app.state.tide_cache if e["date"] == date]
 
     if not results:
         raise HTTPException(status_code=404, detail="No tide data for this date")
