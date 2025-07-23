@@ -287,7 +287,13 @@ def load_weather_data():
 
 
 def calculate_gate_times():
-    """Calculate approximate gate raise/lower times from tide heights."""
+    """Calculate approximate gate raise/lower times from tide heights.
+
+    The terms "raise" and "lower" in the returned events correspond to the
+    physical movement of the gate in Conwy. The gate is **lowered** when the
+    tide rises above ``GATE_OPEN_HEIGHT`` and **raised** again once it falls
+    back below this level.
+    """
     if not app.state.tide_heights_cache:
         load_tide_heights()
 
@@ -305,13 +311,21 @@ def calculate_gate_times():
                 ratio = (threshold - prev_height) / (height - prev_height)
                 crossing = prev_dt + (dt - prev_dt) * ratio
                 date_key = crossing.strftime("%Y-%m-%d")
-                event = {"datetime": crossing.isoformat(), "action": "raise"}
+                event = {
+                    "datetime": crossing.isoformat(),
+                    "action": "lower",
+                    "height": threshold,
+                }
                 events.setdefault(date_key, []).append(event)
             elif prev_height > threshold >= height:
                 ratio = (prev_height - threshold) / (prev_height - height)
                 crossing = prev_dt + (dt - prev_dt) * ratio
                 date_key = crossing.strftime("%Y-%m-%d")
-                event = {"datetime": crossing.isoformat(), "action": "lower"}
+                event = {
+                    "datetime": crossing.isoformat(),
+                    "action": "raise",
+                    "height": threshold,
+                }
                 events.setdefault(date_key, []).append(event)
 
         prev_dt = dt
