@@ -31,9 +31,10 @@ python extract_gate_times.py
 - `/marine` - sea level and ocean current forecast from
   [Open-Meteo](https://open-meteo.com/).
 - `/gate-times` and `/gate-times/{YYYY-MM-DD}` - predicted gate raise and lower
-  times calculated from tide height forecasts. The gate opens when the tide
-  rises to `GATE_OPEN_HEIGHT` metres (default 4&nbsp;m) and closes when it falls
-  back below this level.
+  times calculated from tide height forecasts. Each event includes the date and
+  time, the action to take and the tide height. The gate is **lowered** as the
+  tide rises to `GATE_OPEN_HEIGHT` metres (default 4&nbsp;m) and **raised** once
+  it falls back below this level.
 
 
 Tide, weather and gate time data are cached in memory and refreshed every
