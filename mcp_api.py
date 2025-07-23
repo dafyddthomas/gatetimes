@@ -224,12 +224,14 @@ def load_tide_data():
 
 
 def load_tide_heights():
+    """Load half-hour tide heights for the next six months."""
     if not WORLDTIDES_KEY:
         print("WORLDTIDES_KEY not set; skipping tide heights fetch")
         return
 
     start = datetime.utcnow()
-    heights = fetch_tide_heights(start, 7)
+    # Roughly six months of data (about 180 days)
+    heights = fetch_tide_heights(start, 180)
     for h in heights:
         dt_local = to_local(h["dt"])
         h["dt"] = dt_local.isoformat()
@@ -339,7 +341,10 @@ async def refresh_loop():
     while True:
         await asyncio.to_thread(load_tide_data)
         await asyncio.to_thread(load_weather_data)
-        if datetime.utcnow() - app.state.tide_heights_last_load > timedelta(days=7):
+        if (
+            not app.state.tide_heights_cache
+            or datetime.utcnow() - app.state.tide_heights_last_load > timedelta(days=7)
+        ):
             await asyncio.to_thread(load_tide_heights)
         await asyncio.to_thread(calculate_gate_times)
         await asyncio.sleep(60 * 60 * 12)
@@ -370,7 +375,10 @@ def tides_for_date(date: str, auth: None = Depends(verify_auth)):
 
 @app.get("/tide-heights", response_model=List[TideHeight])
 def tide_heights(offset: int = 0, limit: int = 100, auth: None = Depends(verify_auth)):
-    if datetime.utcnow() - app.state.tide_heights_last_load > timedelta(days=7):
+    if (
+        not app.state.tide_heights_cache
+        or datetime.utcnow() - app.state.tide_heights_last_load > timedelta(days=7)
+    ):
         load_tide_heights()
     return app.state.tide_heights_cache[offset : offset + limit]
 

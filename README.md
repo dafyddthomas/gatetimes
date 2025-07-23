@@ -19,8 +19,8 @@ python extract_gate_times.py
 
 - `/tides/{YYYY-MM-DD}` - 12\u00a0months of cached tide data from
   [WorldTides](https://www.worldtides.info/apidocs) converted to local time.
-- `/tide-heights` - half hour tide heights for the next 7 days refreshed once a
-  week. Heights are relative to chart datum (CD).
+- `/tide-heights` - half hour tide heights for the next 6 months refreshed once
+  a week. Heights are relative to chart datum (CD).
 - `/weather/{YYYY-MM-DD}` - weather forecast for a day if it is within the next
   five days using [OpenWeather](https://openweathermap.org/api/one-call-3), also
   returned in local time.
