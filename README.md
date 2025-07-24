@@ -2,6 +2,19 @@
 
 Conwy Gate Times utilities.
 
+## Overview
+
+**ConwyPilot** is a lightweight AI navigation assistant for planning passages around North Wales. Built in a single evening using the Model Context Protocol (MCP), it connects GPT‑4 to a handful of Python tools running on a tiny 1&nbsp;GB ARM box. The API aggregates tide heights, marina gate openings, weather forecasts and more to help decide when to leave and where to go.
+
+### Key features
+
+- Tide heights from WorldTides
+- Marina gate predictions
+- Wind and surge forecasts from OpenWeather and Open‑Meteo
+- Sunrise, sunset and moon phase checks
+- GPX route generation for Navionics plotters
+
+
 ## Gate time extraction
 
 `extract_gate_times.py` parses `GateTimes2025.pdf` and writes `gate_times.csv`
